@@ -1,0 +1,126 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+concurrency:
+  group: triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.sender.type != 'Bot' &&
+      !contains(github.event.issue.labels.*.name, 'skip-triage')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Sync label catalog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          count=$(yq '. | length' .github/labels.yml)
+          for i in $(seq 0 $((count - 1))); do
+            name=$(yq -r ".[$i].name" .github/labels.yml)
+            color=$(yq -r ".[$i].color" .github/labels.yml)
+            description=$(yq -r ".[$i].description" .github/labels.yml)
+            gh label create "$name" --color "$color" --description "$description" --force
+          done
+
+      - name: Run Claude issue triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --allowed-tools "Read,Grep,Glob,Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh label list:*)"
+          prompt: |
+            Analiza el issue #${{ github.event.issue.number }} del repositorio
+            ${{ github.repository }} (`gh issue view ${{ github.event.issue.number }} --json title,body,comments`)
+            y realiza un triaje automático. Lee primero `CLAUDE.md` en la raíz del
+            repo para entender la arquitectura de `game.js` (estado global,
+            modelo del tablero, rotación geométrica con kicks, bucle de juego,
+            render inmediato) y las restricciones de acoplamiento documentadas
+            (COLS/ROWS/BLOCK vs `<canvas>`, ids del DOM, etc.). Verifica en el
+            código real (`game.js`, `index.html`, `style.css`) cualquier
+            afirmación que hagas, no asumas nada sin comprobarlo.
+
+            ## 1. Etiquetado
+
+            Elige labels EXCLUSIVAMENTE de este catálogo cerrado (no inventes
+            ni crees labels nuevos):
+
+            - Tipo (exactamente uno): "type: bug", "type: feature",
+              "type: refactor", "type: docs", "type: question"
+            - Área (uno o más): "area: gameplay", "area: render", "area: ui",
+              "area: controls", "area: scoring", "area: ci"
+            - Prioridad (exactamente una): "priority: P0", "priority: P1",
+              "priority: P2", "priority: P3"
+            - Complejidad (exactamente una): "size: S", "size: M", "size: L"
+
+            Si el issue no da información suficiente para diagnosticar,
+            etiqueta como "type: question" en vez de inventar un diagnóstico,
+            y en el comentario pide los datos concretos que faltan.
+
+            Aplica los labels con una única llamada:
+            `gh issue edit ${{ github.event.issue.number }} --add-label "label1,label2,..."`
+
+            No quites labels que no pertenezcan a este catálogo (pueden existir
+            labels ajenos al triaje, como "skip-triage").
+
+            ## 2. Diagnóstico técnico
+
+            Publica (o actualiza) un comentario en ESPAÑOL en el issue con
+            exactamente esta estructura:
+
+            ```
+            ## Diagnóstico automático
+
+            **Resumen**
+            ...
+
+            **Archivos y funciones implicadas**
+            ...
+
+            **Causa probable / estado actual**
+            ...
+
+            **Enfoque de solución**
+            ...
+
+            **Riesgos y acoplamientos**
+            ...
+
+            **Criterios de aceptación**
+            ...
+
+            **Labels aplicados**
+            ...
+
+            <!-- claude-triage -->
+            ```
+
+            Antes de comentar, revisa los comentarios existentes del issue
+            (`gh issue view ${{ github.event.issue.number }} --json comments`)
+            buscando el marcador `<!-- claude-triage -->`. Si ya existe un
+            comentario tuyo con ese marcador, actualízalo con
+            `gh issue comment ${{ github.event.issue.number }} --edit-last`
+            en vez de crear uno nuevo, para no duplicar diagnósticos cuando el
+            issue se edita.
+
+            ## Prohibiciones
+
+            - NO edites el cuerpo (body) ni el título del issue.
+            - NO crees ramas, commits ni pull requests.
+            - NO modifiques ningún archivo del repositorio.
+            - Limítate a leer código, etiquetar y comentar el issue.
