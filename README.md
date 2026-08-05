@@ -40,6 +40,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Pieza fantasma** (_ghost piece_): muestra dónde aterrizará la pieza actual.
 - **Vista previa** de la siguiente pieza.
 - **Sistema de hold** (reserva de pieza): guarda la pieza activa para usarla más tarde, con un uso permitido por pieza.
+- **Sistema de habilidades cargables**: una barra de energía se llena al limpiar líneas (con bonus por Tetris, T-spin, combo y Perfect Clear); al llenarse parpadea con un destello y un sonido de fanfarria, y `E` abre un menú para elegir una de cuatro habilidades: ver las 5 piezas siguientes, cambiar la pieza actual por cualquiera de las 7 (con un selector navegable por flechas), ralentizar la caída 10 s (con un contador en pantalla) o deshacer la última colocación.
 - **Sistema de puntuación** clásico de Tetris (100 / 300 / 500 / 800 multiplicado por nivel).
 - **Modo combo y multiplicadores**: encadenar líneas en piezas consecutivas multiplica la puntuación (x2, x3, x4...), con bonus adicionales por **T-spin**, **Back-to-Back** (Tetris o T-spin consecutivos) y **Perfect Clear** (tablero vacío). Cada logro se anuncia con texto flotante, un destello en las líneas eliminadas y un efecto de sonido sintetizado.
 - **Niveles** que aumentan cada 10 líneas y aceleran la caída.
@@ -88,6 +89,12 @@ Después abre `http://localhost:8000` en el navegador.
 | `↓`       | Soft drop (bajar más rápido)      |
 | `Espacio` | Hard drop (caída instantánea)     |
 | `Shift`   | Reservar pieza (hold)             |
+| `E`       | Abrir menú de habilidad (barra llena) |
+| `1`–`4`   | Elegir habilidad en el menú       |
+| `←` / `→` / `↑` / `↓` | Mover el resalte al elegir pieza (submenú) |
+| `Enter`   | Confirmar la pieza resaltada (submenú) |
+| `1`–`7`   | Elegir pieza directamente (submenú) |
+| `Esc`     | Cancelar el menú de habilidad     |
 | `P`       | Pausar / reanudar                 |
 | `M`       | Silenciar / activar sonido        |
 
@@ -126,7 +133,9 @@ Contiene toda la lógica del juego. A grandes rasgos:
 - **Puntuación**: usa la tabla clásica `[0, 100, 300, 500, 800]` (o las tablas de T-spin) multiplicada por combo, B2B y nivel; el hard drop suma 2 puntos por celda recorrida y el soft drop 1 punto por fila.
 - **Nivel y velocidad**: el nivel sube cada 10 líneas; la velocidad de caída se calcula como `max(100, 1000 − (level − 1) × 90)` milisegundos.
 - **Ghost piece** (`ghostY`): proyecta la posición final de la pieza actual hacia abajo y la dibuja con `globalAlpha = 0.2`.
-- **Audio sintetizado**: no hay archivos de sonido; `beep()` genera tonos con `OscillatorNode`/`GainNode` de Web Audio API para combo, líneas, T-spin, Perfect Clear y Game Over. El `AudioContext` se crea de forma perezosa en la primera tecla pulsada.
+- **Audio sintetizado**: no hay archivos de sonido; `beep()` genera tonos con `OscillatorNode`/`GainNode` de Web Audio API para combo, líneas, T-spin, Perfect Clear, Game Over, barra llena y uso de habilidad. El `AudioContext` se crea de forma perezosa en la primera tecla pulsada.
+- **Cola de piezas** (`queue`): siempre contiene `QUEUE_SIZE` piezas generadas por adelantado; `spawn()` saca la primera y añade una nueva al final, así la habilidad "ver 5 piezas" solo necesita mostrar el contenido de la cola.
+- **Sistema de habilidades** (`energy`): gana energía en `finishClear()` según las líneas limpiadas y sus bonus, con tope en `ENERGY_MAX`. Al llenarse dispara un destello y un parpadeo con halo en la barra (`triggerEnergyFullEffect`), un aviso flotante más largo (`ENERGY_MSG_MS`) y una fanfarria distinta al resto de sonidos. `E` (`openAbilityMenu`) pausa el juego y muestra un overlay para elegir una de las 4 habilidades (`useAbility`); "cambiar pieza" abre un segundo submenú con las 7 piezas, navegable con las flechas y confirmable con `Enter` (`swapIndex`, `renderSwapSelection`, `swapToPiece`). "Ralentizar" muestra un contador (`drawSlowTimer`) dibujado sobre el tablero. "Deshacer" restaura una foto del estado (`lastSnapshot`) que `lockPiece()` guarda antes de cada bloqueo. `choosingAbility` detiene el bucle igual que `paused`, y todo el estado se reinicia en `init()`.
 
 ### Flujo del juego
 
@@ -196,6 +205,17 @@ Algunos parámetros fáciles de tunear en `game.js`:
 | `B2B_MULTIPLIER` | Multiplicador de Back-to-Back          | `1.5`                  |
 | `FLASH_MS`     | Duración del destello de líneas en ms    | `180`                  |
 | `FLOAT_MS`     | Duración de los textos flotantes en ms   | `900`                  |
+| `QUEUE_SIZE`   | Piezas visibles por adelantado en la cola | `5`                    |
+| `ENERGY_MAX`   | Energía necesaria para activar una habilidad | `100`              |
+| `ENERGY_PER_LINE` | Energía ganada por línea limpiada     | `8`                     |
+| `ENERGY_TETRIS_BONUS` | Bonus de energía por Tetris (4 líneas) | `10`               |
+| `ENERGY_TSPIN_BONUS` | Bonus de energía por T-spin con líneas | `12`                |
+| `ENERGY_COMBO_BONUS` | Bonus de energía por combo activo (× combo) | `2`             |
+| `ENERGY_PERFECT_BONUS` | Bonus de energía por Perfect Clear  | `20`                 |
+| `SLOW_FACTOR`  | Multiplicador de `dropInterval` al ralentizar | `2.5`              |
+| `SLOW_MS`      | Duración de la ralentización en ms       | `10000`                |
+| `PEEK_PIECES`  | Piezas colocadas que dura "ver 5 piezas" | `5`                     |
+| `ENERGY_MSG_MS` | Duración del aviso "¡ENERGÍA LISTA!" en ms | `1800`               |
 
 > Si cambias `COLS`, `ROWS` o `BLOCK`, recuerda ajustar también `width` y `height` del `<canvas id="board">` en `index.html` para que coincida (`COLS × BLOCK` × `ROWS × BLOCK`).
 

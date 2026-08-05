@@ -36,6 +36,19 @@ const PERFECT_CLEAR_SCORES = [0, 800, 1200, 1800, 2000];
 const B2B_MULTIPLIER = 1.5;
 const FLASH_MS = 180;
 const FLOAT_MS = 900;
+const QUEUE_SIZE = 5;
+
+// --- Sistema de habilidades cargables ---
+const ENERGY_MAX = 100;
+const ENERGY_PER_LINE = 8;      // energía por línea limpiada
+const ENERGY_TETRIS_BONUS = 10; // bonus si el clear es de 4 líneas
+const ENERGY_TSPIN_BONUS = 12;  // bonus si el clear viene de un T-spin
+const ENERGY_COMBO_BONUS = 2;   // × combo activo
+const ENERGY_PERFECT_BONUS = 20;
+const SLOW_FACTOR = 2.5;        // multiplicador de dropInterval al ralentizar
+const SLOW_MS = 10000;
+const PEEK_PIECES = 5;          // duración de "ver 5 piezas" en piezas colocadas
+const ENERGY_MSG_MS = 1800;     // duración del aviso "¡ENERGÍA LISTA!" (el resto usa FLOAT_MS)
 
 // Las 4 orientaciones de la pieza T (según rotateCW) con las esquinas
 // "frontales" (las adyacentes a la punta) de cada una, en coordenadas
@@ -63,11 +76,24 @@ const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
 const muteToggle = document.getElementById('mute-toggle');
+const energySection = document.getElementById('energy-section');
+const energyFill = document.getElementById('energy-fill');
+const nextSection = document.getElementById('next-section');
+const peekSection = document.getElementById('peek-section');
+const peekCanvas = document.getElementById('peek-canvas');
+const peekCtx = peekCanvas.getContext('2d');
+const abilityOverlay = document.getElementById('ability-overlay');
+const abilityMainBox = document.getElementById('ability-main');
+const abilitySwapBox = document.getElementById('ability-swap');
+const ability4Option = document.getElementById('ability-4');
+const swapCanvases = Array.from(document.querySelectorAll('.swap-canvas'));
+const swapItems = Array.from(document.querySelectorAll('.swap-item'));
 
-let board, current, next, hold, canHold, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, current, queue, hold, canHold, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let gridColor, blockHighlight;
 let combo, b2b, lastMoveWasRotation, pendingRows, pendingTspin, clearFlash, floatMsgs, muted;
-let comboColor, tspinColor;
+let comboColor, tspinColor, slowColor;
+let energy, choosingAbility, abilityMenu, slowTimer, peekLeft, lastSnapshot, swapIndex;
 
 function updateThemeColors() {
   const styles = getComputedStyle(document.body);
@@ -75,6 +101,7 @@ function updateThemeColors() {
   blockHighlight = styles.getPropertyValue('--block-highlight').trim();
   comboColor = styles.getPropertyValue('--combo-text').trim();
   tspinColor = styles.getPropertyValue('--tspin-text').trim();
+  slowColor = styles.getPropertyValue('--slow-text').trim();
 }
 
 function setTheme(light) {
@@ -153,6 +180,17 @@ function playPerfectClearSound() {
 function playGameOverSound() {
   beep(440, 500, 'sawtooth', 0, 0.2);
   beep(220, 500, 'sawtooth', 150, 0.15);
+}
+
+function playEnergyFullSound() {
+  // Fanfarria ascendente de 5 notas con la última sostenida, para distinguirla
+  // de los arpegios cortos de Tetris/Perfect Clear.
+  [392, 523.25, 659.25, 783.99].forEach((f, i) => beep(f, 130, 'triangle', i * 70, 0.16));
+  beep(1046.5, 400, 'triangle', 4 * 70, 0.2);
+}
+
+function playAbilitySound() {
+  [659.25, 830.61, 987.77].forEach((f, i) => beep(f, 100, 'sine', i * 50, 0.15));
 }
 
 // ==================== Lógica del tablero ====================
@@ -259,8 +297,8 @@ function isBoardEmpty() {
   return board.every(row => row.every(v => v === 0));
 }
 
-function pushFloatMsg(text, color) {
-  floatMsgs.push({ text, color, life: FLOAT_MS, total: FLOAT_MS });
+function pushFloatMsg(text, color, duration = FLOAT_MS) {
+  floatMsgs.push({ text, color, life: duration, total: duration });
 }
 
 function finishClear() {
@@ -312,6 +350,22 @@ function finishClear() {
     playPerfectClearSound();
   }
 
+  let gain = n * ENERGY_PER_LINE;
+  if (n === 4) gain += ENERGY_TETRIS_BONUS;
+  if (tspin !== 'none' && n > 0) gain += ENERGY_TSPIN_BONUS;
+  if (combo > 0) gain += combo * ENERGY_COMBO_BONUS;
+  if (perfectClear) gain += ENERGY_PERFECT_BONUS;
+  const wasFull = energy >= ENERGY_MAX;
+  energy = Math.min(ENERGY_MAX, energy + gain);
+  if (!wasFull && energy >= ENERGY_MAX) {
+    pushFloatMsg('¡ENERGÍA LISTA!', comboColor, ENERGY_MSG_MS);
+    playEnergyFullSound();
+    updateEnergyUI();
+    triggerEnergyFullEffect();
+  } else {
+    updateEnergyUI();
+  }
+
   lines += n;
   score += Math.round(total * level);
   level = Math.floor(lines / 10) + 1;
@@ -347,6 +401,16 @@ function softDrop() {
 }
 
 function lockPiece() {
+  lastSnapshot = {
+    board: board.map(row => row.slice()),
+    type: current.type,
+    score, lines, level, dropInterval,
+    combo, b2b, energy,
+    hold: hold ? hold.type : null,
+    canHold,
+    queue: queue.map(p => p.type),
+  };
+
   const tspin = detectTspin();
   merge();
   const rows = findFullRows();
@@ -369,9 +433,13 @@ function lockPiece() {
 }
 
 function spawn() {
-  current = next;
-  next = randomPiece();
+  current = queue.shift();
+  queue.push(randomPiece());
   lastMoveWasRotation = false;
+  if (peekLeft > 0) {
+    peekLeft--;
+    if (peekLeft === 0) updatePeekUI();
+  }
   if (collide(current.shape, current.x, current.y)) {
     endGame();
     return;
@@ -398,6 +466,132 @@ function holdPiece() {
   canHold = false;
   holdSection.classList.add('locked');
   drawHold();
+}
+
+// ==================== Sistema de habilidades cargables ====================
+
+function openAbilityMenu() {
+  if (energy < ENERGY_MAX || !current || paused || gameOver || choosingAbility) return;
+  choosingAbility = true;
+  abilityMenu = 'main';
+  cancelAnimationFrame(animId);
+  ability4Option.classList.toggle('disabled', lastSnapshot === null);
+  abilitySwapBox.classList.add('hidden');
+  abilityMainBox.classList.remove('hidden');
+  abilityOverlay.classList.remove('hidden');
+}
+
+function closeAbilityMenu() {
+  abilityOverlay.classList.add('hidden');
+  choosingAbility = false;
+  abilityMenu = null;
+  if (!gameOver) {
+    lastTime = performance.now();
+    loop(lastTime);
+  }
+}
+
+function useAbility(n) {
+  if (n === 1) {
+    peekLeft = PEEK_PIECES;
+    updatePeekUI();
+    drawNext();
+  } else if (n === 2) {
+    abilityMenu = 'swap';
+    swapIndex = 0;
+    abilityMainBox.classList.add('hidden');
+    abilitySwapBox.classList.remove('hidden');
+    renderSwapSelection();
+    return; // se gasta la energía al elegir la pieza, no al entrar al submenú
+  } else if (n === 3) {
+    slowTimer = SLOW_MS;
+  } else if (n === 4) {
+    if (lastSnapshot === null) return;
+    undoLastPlacement();
+  }
+  energy = 0;
+  updateEnergyUI();
+  playAbilitySound();
+  closeAbilityMenu();
+}
+
+function renderSwapSelection() {
+  swapItems.forEach((item, i) => item.classList.toggle('selected', i === swapIndex));
+}
+
+function swapToPiece(type) {
+  current = pieceFromType(type);
+  lastMoveWasRotation = false;
+  energy = 0;
+  updateEnergyUI();
+  const collided = collide(current.shape, current.x, current.y);
+  closeAbilityMenu();
+  if (collided) {
+    endGame();
+  } else {
+    playAbilitySound();
+  }
+}
+
+function undoLastPlacement() {
+  const snap = lastSnapshot;
+  board = snap.board.map(row => row.slice());
+  score = snap.score;
+  lines = snap.lines;
+  level = snap.level;
+  dropInterval = snap.dropInterval;
+  combo = snap.combo;
+  b2b = snap.b2b;
+  energy = snap.energy;
+  hold = snap.hold === null ? null : pieceFromType(snap.hold);
+  canHold = snap.canHold;
+  holdSection.classList.toggle('locked', !canHold);
+  queue = snap.queue.map(t => pieceFromType(t));
+  current = pieceFromType(snap.type);
+  lastMoveWasRotation = false;
+  lastSnapshot = null;
+  updateHUD();
+  drawHold();
+  drawNext();
+}
+
+function handleAbilityKey(e) {
+  if (e.code === 'Escape') { closeAbilityMenu(); return; }
+  if (abilityMenu === 'main') {
+    const map = { Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4 };
+    const n = map[e.code];
+    if (!n) return;
+    if (n === 4 && lastSnapshot === null) return;
+    useAbility(n);
+  } else if (abilityMenu === 'swap') {
+    const m = e.code.match(/^Digit([1-7])$/);
+    if (m) { swapToPiece(Number(m[1])); return; }
+    switch (e.code) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        swapIndex = (swapIndex + 6) % 7; // +6 ≡ -1 (mod 7), evita índices negativos
+        renderSwapSelection();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        swapIndex = (swapIndex + 1) % 7;
+        renderSwapSelection();
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        if (swapIndex - 4 >= 0) { swapIndex -= 4; renderSwapSelection(); }
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        if (swapIndex + 4 <= 6) { swapIndex += 4; renderSwapSelection(); }
+        break;
+      case 'Enter':
+      case 'Space':
+        e.preventDefault();
+        swapToPiece(swapIndex + 1);
+        break;
+    }
+  }
 }
 
 function updateHUD() {
@@ -464,6 +658,32 @@ function drawFloatMsgs() {
   ctx.globalAlpha = 1;
 }
 
+// Contador de la ralentización, dibujado en la esquina superior derecha del
+// tablero. Se dibuja fuera del guard `if (current)` de draw() porque el
+// efecto debe seguir visible durante la ventana de destello de línea, en la
+// que `current` es null.
+function drawSlowTimer() {
+  if (slowTimer <= 0) return;
+  const w = 74, h = 30, x = COLS * BLOCK - w - 6, y = 6;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 6);
+  ctx.fill();
+
+  const seconds = (slowTimer / 1000).toFixed(1);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 13px system-ui, sans-serif';
+  ctx.fillStyle = slowColor;
+  ctx.fillText(`⏱ ${seconds}s`, x + w / 2, y + 12);
+
+  const barX = x + 6, barY = y + h - 8, barW = w - 12, barH = 4;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+  ctx.fillRect(barX, barY, barW, barH);
+  ctx.fillStyle = slowColor;
+  ctx.fillRect(barX, barY, barW * (slowTimer / SLOW_MS), barH);
+}
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
@@ -489,27 +709,60 @@ function draw() {
         drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
   }
 
+  drawSlowTimer();
   drawFloatMsgs();
 }
 
-function drawPreview(context, canvasEl, piece) {
-  const NB = 30;
-  context.clearRect(0, 0, canvasEl.width, canvasEl.height);
+function drawPreview(context, piece, nb = 30, originX = 0, originY = 0, clear = true) {
+  if (clear) context.clearRect(0, 0, context.canvas.width, context.canvas.height);
   if (!piece) return;
   const shape = piece.shape;
   const offX = Math.floor((4 - shape[0].length) / 2);
   const offY = Math.floor((4 - shape.length) / 2);
   for (let r = 0; r < shape.length; r++)
     for (let c = 0; c < shape[r].length; c++)
-      drawBlock(context, offX + c, offY + r, shape[r][c], NB);
+      drawBlock(context, originX + offX + c, originY + offY + r, shape[r][c], nb);
 }
 
 function drawNext() {
-  drawPreview(nextCtx, nextCanvas, next);
+  drawPreview(nextCtx, queue[0]);
+  if (peekLeft > 0) drawPeek();
 }
 
 function drawHold() {
-  drawPreview(holdCtx, holdCanvas, hold);
+  drawPreview(holdCtx, hold);
+}
+
+function drawPeek() {
+  peekCtx.clearRect(0, 0, peekCanvas.width, peekCanvas.height);
+  for (let i = 0; i < PEEK_PIECES; i++) drawPreview(peekCtx, queue[i], 15, 2, i * 4, false);
+}
+
+function drawSwapOptions() {
+  swapCanvases.forEach(cv => {
+    const type = Number(cv.dataset.type);
+    drawPreview(cv.getContext('2d'), pieceFromType(type), 15);
+  });
+}
+
+function updatePeekUI() {
+  const active = peekLeft > 0;
+  nextSection.classList.toggle('hidden', active);
+  peekSection.classList.toggle('hidden', !active);
+}
+
+function updateEnergyUI() {
+  energyFill.style.width = `${(energy / ENERGY_MAX) * 100}%`;
+  energySection.classList.toggle('full', energy >= ENERGY_MAX);
+}
+
+// Relanza el destello que recorre la barra al llenarse. Se quita la clase, se
+// fuerza un reflow y se vuelve a añadir para poder reiniciar la animación CSS
+// aunque ya estuviera presente (p. ej. si se llena dos veces sin gastarla).
+function triggerEnergyFullEffect() {
+  energySection.classList.remove('just-filled');
+  void energySection.offsetWidth;
+  energySection.classList.add('just-filled');
 }
 
 function endGame() {
@@ -544,6 +797,10 @@ function loop(ts) {
     floatMsgs = floatMsgs.filter(m => m.life > 0);
   }
 
+  if (slowTimer > 0) {
+    slowTimer = Math.max(0, slowTimer - dt);
+  }
+
   if (pendingRows) {
     clearFlash -= dt;
     if (clearFlash <= 0) {
@@ -552,7 +809,8 @@ function loop(ts) {
     }
   } else if (current) {
     dropAccum += dt;
-    if (dropAccum >= dropInterval) {
+    const interval = slowTimer > 0 ? dropInterval * SLOW_FACTOR : dropInterval;
+    if (dropAccum >= interval) {
       dropAccum = 0;
       if (!collide(current.shape, current.x, current.y + 1)) {
         current.y++;
@@ -589,7 +847,19 @@ function init() {
   pendingTspin = 'none';
   clearFlash = 0;
   floatMsgs = [];
-  next = randomPiece();
+  energy = 0;
+  choosingAbility = false;
+  abilityMenu = null;
+  slowTimer = 0;
+  peekLeft = 0;
+  lastSnapshot = null;
+  swapIndex = 0;
+  energySection.classList.remove('just-filled');
+  updateEnergyUI();
+  updatePeekUI();
+  abilityOverlay.classList.add('hidden');
+  queue = [];
+  while (queue.length < QUEUE_SIZE) queue.push(randomPiece());
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
@@ -598,6 +868,7 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
+  if (choosingAbility) { handleAbilityKey(e); return; }
   if (e.code === 'KeyP') { togglePause(); return; }
   if (e.code === 'KeyM') { setMuted(!muted); return; }
   ensureAudio();
@@ -630,6 +901,9 @@ document.addEventListener('keydown', e => {
     case 'ShiftRight':
       holdPiece();
       break;
+    case 'KeyE':
+      openAbilityMenu();
+      break;
   }
   updateHUD();
 });
@@ -637,4 +911,5 @@ document.addEventListener('keydown', e => {
 restartBtn.addEventListener('click', init);
 
 setMuted(localStorage.getItem('muted') === '1');
+drawSwapOptions();
 init();

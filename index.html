@@ -36,14 +36,26 @@
           <span class="value" id="level">1</span>
         </div>
 
+        <div class="panel-section" id="energy-section">
+          <span class="label">ENERGÍA</span>
+          <div class="energy-bar">
+            <div class="energy-fill" id="energy-fill"></div>
+          </div>
+        </div>
+
         <div class="panel-section" id="hold-section">
           <span class="label">HOLD</span>
           <canvas id="hold-canvas" width="120" height="120"></canvas>
         </div>
 
-        <div class="panel-section">
+        <div class="panel-section" id="next-section">
           <span class="label">NEXT</span>
           <canvas id="next-canvas" width="120" height="120"></canvas>
+        </div>
+
+        <div class="panel-section hidden" id="peek-section">
+          <span class="label">SIGUIENTES</span>
+          <canvas id="peek-canvas" width="120" height="300"></canvas>
         </div>
 
         <div class="panel-section controls">
@@ -54,6 +66,7 @@
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
             <li><kbd>Shift</kbd> reservar</li>
+            <li><kbd>E</kbd> habilidad</li>
             <li><kbd>P</kbd> pausa</li>
             <li><kbd>M</kbd> silencio</li>
           </ul>
@@ -66,6 +79,32 @@
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
         <button id="restart-btn">Reiniciar</button>
+      </div>
+    </div>
+
+    <div id="ability-overlay" class="overlay hidden">
+      <div class="overlay-box" id="ability-main">
+        <p class="ability-title">ELIGE UNA HABILIDAD</p>
+        <ul class="ability-list">
+          <li class="ability-option" id="ability-1"><kbd>1</kbd> Ver 5 piezas</li>
+          <li class="ability-option" id="ability-2"><kbd>2</kbd> Cambiar pieza</li>
+          <li class="ability-option" id="ability-3"><kbd>3</kbd> Ralentizar 10s</li>
+          <li class="ability-option" id="ability-4"><kbd>4</kbd> Deshacer jugada</li>
+        </ul>
+        <p class="ability-hint"><kbd>Esc</kbd> cancelar</p>
+      </div>
+      <div class="overlay-box hidden" id="ability-swap">
+        <p class="ability-title">ELIGE UNA PIEZA</p>
+        <div class="swap-grid">
+          <div class="swap-item"><span class="swap-num">1</span><canvas class="swap-canvas" data-type="1" width="60" height="60"></canvas></div>
+          <div class="swap-item"><span class="swap-num">2</span><canvas class="swap-canvas" data-type="2" width="60" height="60"></canvas></div>
+          <div class="swap-item"><span class="swap-num">3</span><canvas class="swap-canvas" data-type="3" width="60" height="60"></canvas></div>
+          <div class="swap-item"><span class="swap-num">4</span><canvas class="swap-canvas" data-type="4" width="60" height="60"></canvas></div>
+          <div class="swap-item"><span class="swap-num">5</span><canvas class="swap-canvas" data-type="5" width="60" height="60"></canvas></div>
+          <div class="swap-item"><span class="swap-num">6</span><canvas class="swap-canvas" data-type="6" width="60" height="60"></canvas></div>
+          <div class="swap-item"><span class="swap-num">7</span><canvas class="swap-canvas" data-type="7" width="60" height="60"></canvas></div>
+        </div>
+        <p class="ability-hint"><kbd>←</kbd><kbd>→</kbd> elegir · <kbd>Enter</kbd> confirmar · <kbd>Esc</kbd> cancelar</p>
       </div>
     </div>
   </div>
