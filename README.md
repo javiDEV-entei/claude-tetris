@@ -237,3 +237,17 @@ Al cargar la página se muestra `#start-overlay` en vez de arrancar la partida d
 - Al perder la partida, si la puntuación entra en el top 5 se muestra un formulario (`#record-form`) para introducir un nombre (`#record-name`, máx. 12 caracteres); al guardar se llama a `addRecord` y se pinta la tabla resaltando la fila nueva. Si no entra en el top 5, se pinta la tabla directamente sin resaltar nada.
 - Un botón **Borrar records** (con `confirm()` de por medio) está disponible tanto en la pantalla de inicio como en el overlay de Game Over.
 - `maxCombo` es una nueva global que guarda el mejor combo de la partida en curso (actualizada en `finishClear()`, reseteada a `0` en `init()`) y se usa para alimentar `bestCombo` al guardar un record.
+---
+
+## Temas visuales (skins)
+
+Un selector `SKIN` en el panel lateral (junto a la barra de energía) permite cambiar la apariencia completa del juego — tablero, next, hold, peek, selector de "cambiar pieza" y toda la interfaz vía variables CSS — sin afectar al interruptor claro/oscuro existente, que sigue funcionando de forma independiente.
+
+Skins disponibles:
+
+- **Retro** — bloques cuadrados y colores planos, el aspecto original del juego.
+- **Neon** — fondo negro con efecto de resplandor (`shadowBlur`) alrededor de cada bloque.
+- **Pastel** — paleta de colores suaves con esquinas redondeadas.
+- **Pixel art** — colores planos con una textura de cuadrícula superpuesta que simula dithering.
+
+La skin elegida se guarda en `localStorage` (`skin`) y persiste entre partidas, igual que el tema claro/oscuro y el silencio de sonido. En `game.js`, la estructura `SKINS` centraliza la paleta y la función de dibujado de cada skin; `drawBlock` delega en `SKINS[skin].draw(...)` para pintar cada bloque en cualquier canvas del juego.
