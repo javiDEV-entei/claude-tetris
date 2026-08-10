@@ -178,6 +178,14 @@ const abilitySwapBox = document.getElementById('ability-swap');
 const ability4Option = document.getElementById('ability-4');
 const swapCanvases = Array.from(document.querySelectorAll('.swap-canvas'));
 const swapItems = Array.from(document.querySelectorAll('.swap-item'));
+const startOverlay = document.getElementById('start-overlay');
+const playBtn = document.getElementById('play-btn');
+const recordForm = document.getElementById('record-form');
+const recordNameInput = document.getElementById('record-name');
+const recordsListGameOver = document.getElementById('records-list-gameover');
+const recordsListStart = document.getElementById('records-list-start');
+const clearRecordsBtn = document.getElementById('clear-records-btn');
+const startClearRecordsBtn = document.getElementById('start-clear-records-btn');
 const skinSelect = document.getElementById('skin-select');
 
 let board, current, queue, hold, canHold, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
@@ -186,6 +194,7 @@ let skin;
 let combo, b2b, lastMoveWasRotation, pendingRows, pendingTspin, clearFlash, floatMsgs, muted;
 let comboColor, tspinColor, slowColor;
 let energy, choosingAbility, abilityMenu, slowTimer, peekLeft, lastSnapshot, swapIndex;
+let maxCombo;
 
 function updateThemeColors() {
   const styles = getComputedStyle(document.body);
@@ -436,6 +445,7 @@ function finishClear() {
   b2b = isHard;
 
   combo++;
+  maxCombo = Math.max(maxCombo, combo);
   const comboMult = Math.min(1 + combo, COMBO_MAX_MULTIPLIER);
   if (combo > 0) {
     total *= comboMult;
@@ -874,6 +884,94 @@ function triggerEnergyFullEffect() {
   energySection.classList.add('just-filled');
 }
 
+// ==================== Records (tabla de puntuaciones) ====================
+
+const RECORDS_KEY = 'records';
+const MAX_RECORDS = 5;
+
+function loadRecords() {
+  try {
+    const raw = localStorage.getItem(RECORDS_KEY);
+    if (!raw) return { scores: [], bestCombo: 0, maxLines: 0 };
+    const parsed = JSON.parse(raw);
+    return {
+      scores: Array.isArray(parsed.scores) ? parsed.scores : [],
+      bestCombo: Number(parsed.bestCombo) || 0,
+      maxLines: Number(parsed.maxLines) || 0,
+    };
+  } catch {
+    return { scores: [], bestCombo: 0, maxLines: 0 };
+  }
+}
+
+function saveRecords(data) {
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(data));
+}
+
+function qualifies(scoreValue) {
+  if (!(scoreValue > 0)) return false;
+  const data = loadRecords();
+  if (data.scores.length < MAX_RECORDS) return true;
+  const worst = data.scores[data.scores.length - 1];
+  return scoreValue > worst.score;
+}
+
+function addRecord(name, scoreValue, linesValue, levelValue) {
+  const data = loadRecords();
+  const record = { name: (name || 'Jugador').slice(0, 12), score: scoreValue, lines: linesValue, level: levelValue };
+  data.scores.push(record);
+  data.scores.sort((a, b) => b.score - a.score);
+  data.scores = data.scores.slice(0, MAX_RECORDS);
+  data.bestCombo = Math.max(data.bestCombo, maxCombo);
+  data.maxLines = Math.max(data.maxLines, linesValue);
+  saveRecords(data);
+  return data.scores.indexOf(record);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Pinta el top 5 (nombre + puntuación) dentro de `container`, resaltando la
+// fila `highlightIndex` si se pasa. Se reutiliza tanto en el overlay de
+// Game Over como en la pantalla de inicio.
+function renderRecords(container, highlightIndex) {
+  if (!container) return;
+  const data = loadRecords();
+  container.innerHTML = '';
+
+  const list = document.createElement('ol');
+  list.className = 'records-ol';
+  if (data.scores.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'records-empty';
+    li.textContent = 'Sin puntuaciones todavía';
+    list.appendChild(li);
+  } else {
+    data.scores.forEach((r, i) => {
+      const li = document.createElement('li');
+      li.className = 'records-row' + (i === highlightIndex ? ' highlight' : '');
+      li.innerHTML = `<span class="records-name">${escapeHtml(r.name)}</span><span class="records-score">${r.score.toLocaleString()}</span>`;
+      list.appendChild(li);
+    });
+  }
+  container.appendChild(list);
+
+  const stats = document.createElement('p');
+  stats.className = 'records-stats';
+  stats.textContent = `Mejor combo: ${data.bestCombo} · Máx. líneas: ${data.maxLines}`;
+  container.appendChild(stats);
+}
+
+function clearAllRecords() {
+  if (!confirm('¿Borrar todos los records?')) return;
+  localStorage.removeItem(RECORDS_KEY);
+  renderRecords(recordsListGameOver, null);
+  renderRecords(recordsListStart, null);
+}
+
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
@@ -881,6 +979,18 @@ function endGame() {
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
   playGameOverSound();
+
+  clearRecordsBtn.classList.remove('hidden');
+
+  if (qualifies(score)) {
+    recordNameInput.value = 'Jugador';
+    recordForm.classList.remove('hidden');
+    recordsListGameOver.classList.add('hidden');
+  } else {
+    recordForm.classList.add('hidden');
+    recordsListGameOver.classList.remove('hidden');
+    renderRecords(recordsListGameOver, null);
+  }
 }
 
 function togglePause() {
@@ -963,6 +1073,7 @@ function init() {
   peekLeft = 0;
   lastSnapshot = null;
   swapIndex = 0;
+  maxCombo = 0;
   energySection.classList.remove('just-filled');
   updateEnergyUI();
   updatePeekUI();
@@ -1019,6 +1130,26 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 
+recordForm.addEventListener('submit', e => {
+  e.preventDefault();
+  const name = (recordNameInput.value || '').trim() || 'Jugador';
+  const idx = addRecord(name, score, lines, level);
+  recordForm.classList.add('hidden');
+  recordsListGameOver.classList.remove('hidden');
+  renderRecords(recordsListGameOver, idx);
+});
+
+clearRecordsBtn.addEventListener('click', clearAllRecords);
+startClearRecordsBtn.addEventListener('click', clearAllRecords);
+
 setMuted(localStorage.getItem('muted') === '1');
 drawSwapOptions();
-init();
+
+renderRecords(recordsListStart, null);
+startOverlay.classList.remove('hidden');
+
+playBtn.addEventListener('click', () => {
+  ensureAudio();
+  startOverlay.classList.add('hidden');
+  init();
+}, { once: true });
