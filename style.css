@@ -405,3 +405,97 @@ kbd {
   color: var(--accent);
   transition: color 0.15s;
 }
+
+/* ---- Selector de skin ---- */
+#skin-select {
+  background: var(--kbd-bg);
+  color: var(--text);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ---- Skins ---- */
+body[data-skin="neon"] {
+  --bg: #000000;
+  --text: #e0fbff;
+  --accent: #00e5ff;
+  --board-bg: #050505;
+  --board-border: #00e5ff;
+  --label-color: #4dd0e1;
+  --kbd-bg: #0a0a0a;
+  --kbd-border: #00e5ff;
+  --kbd-color: #00e5ff;
+  --controls-color: #4dd0e1;
+  --overlay-bg: rgba(0, 0, 0, 0.85);
+  --overlay-title: #ff1744;
+  --restart-bg: #00e5ff;
+  --restart-color: #000000;
+  --restart-hover: #6bf3ff;
+  --grid-line: #0a1a1e;
+  --block-highlight: rgba(255, 255, 255, 0.25);
+  --combo-text: #ffea00;
+  --tspin-text: #e040fb;
+  --energy-bg: #0a0a0a;
+  --energy-fill: #00e5ff;
+  --energy-full: #00e676;
+  --energy-glow: rgba(0, 230, 118, 0.7);
+  --slow-text: #00e5ff;
+}
+
+body[data-skin="pastel"] {
+  --bg: #fdf6f0;
+  --text: #5a5468;
+  --accent: #b8a4d4;
+  --board-bg: #fffaf5;
+  --board-border: #e8d9ec;
+  --label-color: #a89ab5;
+  --kbd-bg: #f3e9f5;
+  --kbd-border: #e0cde5;
+  --kbd-color: #8a7f96;
+  --controls-color: #a89ab5;
+  --overlay-bg: rgba(255, 250, 245, 0.85);
+  --overlay-title: #e08a9e;
+  --restart-bg: #b8a4d4;
+  --restart-color: #ffffff;
+  --restart-hover: #c9b9e0;
+  --grid-line: #f0e6ea;
+  --block-highlight: rgba(255, 255, 255, 0.6);
+  --combo-text: #e0b84a;
+  --tspin-text: #b884c9;
+  --energy-bg: #f3e9f5;
+  --energy-fill: #b8a4d4;
+  --energy-full: #a8ded8;
+  --energy-glow: rgba(168, 222, 216, 0.6);
+  --slow-text: #b8a4d4;
+}
+
+body[data-skin="pixel"] {
+  --bg: #1b1b2e;
+  --text: #d6d6f5;
+  --accent: #ffd54f;
+  --board-bg: #12121f;
+  --board-border: #3a3a5a;
+  --label-color: #7777aa;
+  --kbd-bg: #24243a;
+  --kbd-border: #46466a;
+  --kbd-color: #bfbfe0;
+  --controls-color: #8888b0;
+  --overlay-bg: rgba(18, 18, 31, 0.85);
+  --overlay-title: #e57373;
+  --restart-bg: #ffd54f;
+  --restart-color: #1b1b2e;
+  --restart-hover: #ffe082;
+  --grid-line: #26263e;
+  --block-highlight: rgba(255, 255, 255, 0.12);
+  --combo-text: #ffd54f;
+  --tspin-text: #ba68c8;
+  --energy-bg: #24243a;
+  --energy-fill: #ffd54f;
+  --energy-full: #4dd0e1;
+  --energy-glow: rgba(77, 208, 225, 0.6);
+  --slow-text: #ffd54f;
+}

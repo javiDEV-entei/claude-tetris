@@ -26,6 +26,96 @@ const PIECES = [
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
 ];
 
+// ==================== Skins visuales ====================
+// Cada skin define su propia paleta (mismo formato que COLORS, índice 0 =
+// null) y una función draw(context, px, py, w, color, alpha) que recibe
+// coordenadas de PÍXEL ya calculadas por drawBlock (no de celda).
+
+const NEON_COLORS = [
+  null,
+  '#00e5ff', // I
+  '#ffea00', // O
+  '#e040fb', // T
+  '#00e676', // S
+  '#ff1744', // Z
+  '#2979ff', // J
+  '#ff9100', // L
+];
+
+const PASTEL_COLORS = [
+  null,
+  '#a8ded8', // I
+  '#fff2b2', // O
+  '#dcb8e0', // T
+  '#bfe6c1', // S
+  '#f3b8b8', // Z
+  '#b8d4f0', // J
+  '#f5d3a8', // L
+];
+
+function retroDrawBlock(context, px, py, w, color, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = color;
+  context.fillRect(px, py, w, w);
+  context.fillStyle = blockHighlight;
+  context.fillRect(px, py, w, 4);
+  context.globalAlpha = 1;
+}
+
+function neonDrawBlock(context, px, py, w, color, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = '#050505';
+  context.fillRect(px, py, w, w);
+  context.shadowBlur = 12;
+  context.shadowColor = color;
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  context.strokeRect(px + 1, py + 1, w - 2, w - 2);
+  context.fillStyle = color;
+  context.globalAlpha = (alpha ?? 1) * 0.5;
+  context.fillRect(px + 4, py + 4, w - 8, w - 8);
+  context.globalAlpha = alpha ?? 1;
+  // Reset obligatorio: si no, el glow se filtra a todo lo dibujado después
+  // en este mismo contexto (grid, texto flotante, HUD del canvas).
+  context.shadowBlur = 0;
+  context.shadowColor = 'transparent';
+  context.globalAlpha = 1;
+}
+
+function pastelDrawBlock(context, px, py, w, color, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = color;
+  context.beginPath();
+  context.roundRect(px, py, w, w, 4);
+  context.fill();
+  context.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  context.beginPath();
+  context.roundRect(px, py, w, Math.max(w * 0.35, 3), 4);
+  context.fill();
+  context.globalAlpha = 1;
+}
+
+function pixelDrawBlock(context, px, py, w, color, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = color;
+  context.fillRect(px, py, w, w);
+  const cell = w / 3;
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      context.fillStyle = (r + c) % 2 === 0 ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.14)';
+      context.fillRect(px + c * cell, py + r * cell, cell, cell);
+    }
+  }
+  context.globalAlpha = 1;
+}
+
+const SKINS = {
+  retro: { colors: COLORS, draw: retroDrawBlock },
+  neon: { colors: NEON_COLORS, draw: neonDrawBlock },
+  pastel: { colors: PASTEL_COLORS, draw: pastelDrawBlock },
+  pixel: { colors: COLORS, draw: pixelDrawBlock },
+};
+
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
 // --- Modo combo y multiplicadores ---
@@ -88,9 +178,11 @@ const abilitySwapBox = document.getElementById('ability-swap');
 const ability4Option = document.getElementById('ability-4');
 const swapCanvases = Array.from(document.querySelectorAll('.swap-canvas'));
 const swapItems = Array.from(document.querySelectorAll('.swap-item'));
+const skinSelect = document.getElementById('skin-select');
 
 let board, current, queue, hold, canHold, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let gridColor, blockHighlight;
+let skin;
 let combo, b2b, lastMoveWasRotation, pendingRows, pendingTspin, clearFlash, floatMsgs, muted;
 let comboColor, tspinColor, slowColor;
 let energy, choosingAbility, abilityMenu, slowTimer, peekLeft, lastSnapshot, swapIndex;
@@ -116,6 +208,25 @@ themeToggle.addEventListener('change', () => {
 });
 
 setTheme(localStorage.getItem('theme') === 'light');
+
+function setSkin(name) {
+  skin = SKINS[name] ? name : 'retro';
+  document.body.dataset.skin = skin;
+  if (skinSelect) skinSelect.value = skin;
+  updateThemeColors();
+  localStorage.setItem('skin', skin);
+  // Guards: al llamarse en la carga inicial (antes de init()), `board` y
+  // `queue` todavía no existen — repintar solo lo que ya puede dibujarse sin
+  // tronar. drawHold() es segura siempre (drawPreview corta en `!piece`).
+  if (typeof board !== 'undefined' && board) draw();
+  drawHold();
+  if (typeof queue !== 'undefined' && queue) drawNext();
+  drawSwapOptions();
+}
+
+if (skinSelect) skinSelect.addEventListener('change', () => setSkin(skinSelect.value));
+
+setSkin(localStorage.getItem('skin') || 'retro');
 
 function setMuted(value) {
   muted = value;
@@ -602,14 +713,12 @@ function updateHUD() {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
-  context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = blockHighlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
-  context.globalAlpha = 1;
+  const activeSkin = SKINS[skin] || SKINS.retro;
+  const color = activeSkin.colors[colorIndex];
+  const px = x * size + 1;
+  const py = y * size + 1;
+  const w = size - 2;
+  activeSkin.draw(context, px, py, w, color, alpha);
 }
 
 function drawGrid() {

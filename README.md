@@ -224,3 +224,18 @@ Algunos parámetros fáciles de tunear en `game.js`:
 ## Licencia
 
 Proyecto de uso libre con fines educativos y de práctica.
+
+---
+
+## Temas visuales (skins)
+
+Un selector `SKIN` en el panel lateral (junto a la barra de energía) permite cambiar la apariencia completa del juego — tablero, next, hold, peek, selector de "cambiar pieza" y toda la interfaz vía variables CSS — sin afectar al interruptor claro/oscuro existente, que sigue funcionando de forma independiente.
+
+Skins disponibles:
+
+- **Retro** — bloques cuadrados y colores planos, el aspecto original del juego.
+- **Neon** — fondo negro con efecto de resplandor (`shadowBlur`) alrededor de cada bloque.
+- **Pastel** — paleta de colores suaves con esquinas redondeadas.
+- **Pixel art** — colores planos con una textura de cuadrícula superpuesta que simula dithering.
+
+La skin elegida se guarda en `localStorage` (`skin`) y persiste entre partidas, igual que el tema claro/oscuro y el silencio de sonido. En `game.js`, la estructura `SKINS` centraliza la paleta y la función de dibujado de cada skin; `drawBlock` delega en `SKINS[skin].draw(...)` para pintar cada bloque en cualquier canvas del juego.
