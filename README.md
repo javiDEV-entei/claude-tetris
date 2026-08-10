@@ -227,6 +227,21 @@ Proyecto de uso libre con fines educativos y de práctica.
 
 ---
 
+## Menú de pausa
+
+Al pulsar `P` o `Esc` durante la partida se abre un menú de pausa navegable con teclado (`↑`/`↓`/`Enter`) o con clic:
+
+| Opción           | Acción                                                    |
+| ---------------- | ---------------------------------------------------------- |
+| Reanudar         | Cierra el menú y continúa la partida                        |
+| Reiniciar        | Reinicia la partida (equivale a pulsar "Reiniciar" en game over) |
+| Ver controles    | Muestra la lista de teclas del juego                        |
+| Nivel inicial    | Selector (1–15) del nivel con el que empieza cada partida nueva, ajustable con `←`/`→` |
+
+`Esc` dentro de cualquier submenú vuelve a la pantalla anterior (o reanuda la partida si está en la pantalla principal). El nivel inicial elegido se guarda en `localStorage` (clave `startLevel`) y se aplica automáticamente a la próxima partida — el nivel nunca baja del elegido aunque las líneas acumuladas correspondan a un nivel inferior.
+
+---
+
 ## Pantalla de inicio y tabla de records
 
 Al cargar la página se muestra `#start-overlay` en vez de arrancar la partida directamente: un título, el top 5 de puntuaciones guardado localmente, el mejor combo y el máximo de líneas conseguidos, y un botón **Jugar** que oculta la pantalla de inicio y llama a `init()` (el clic también sirve como gesto de usuario para desbloquear el `AudioContext`).
