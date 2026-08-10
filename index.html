@@ -107,6 +107,39 @@
         <p class="ability-hint"><kbd>←</kbd><kbd>→</kbd> elegir · <kbd>Enter</kbd> confirmar · <kbd>Esc</kbd> cancelar</p>
       </div>
     </div>
+
+    <div id="pause-overlay" class="overlay hidden">
+      <div class="overlay-box" id="pause-main">
+        <p class="pause-title">PAUSA</p>
+        <ul class="pause-list">
+          <li class="pause-option" id="pause-resume">Reanudar</li>
+          <li class="pause-option" id="pause-restart">Reiniciar</li>
+          <li class="pause-option" id="pause-view-controls">Ver controles</li>
+          <li class="pause-option" id="pause-view-level">Nivel inicial</li>
+        </ul>
+        <p class="ability-hint"><kbd>↑</kbd><kbd>↓</kbd> navegar · <kbd>Enter</kbd> elegir · <kbd>Esc</kbd> reanudar</p>
+      </div>
+      <div class="overlay-box hidden" id="pause-controls">
+        <p class="pause-title">CONTROLES</p>
+        <ul>
+          <li><kbd>←</kbd><kbd>→</kbd> mover</li>
+          <li><kbd>↑</kbd> rotar</li>
+          <li><kbd>↓</kbd> bajar</li>
+          <li><kbd>Space</kbd> caída</li>
+          <li><kbd>Shift</kbd> reservar</li>
+          <li><kbd>E</kbd> habilidad</li>
+          <li><kbd>P</kbd> pausa</li>
+          <li><kbd>M</kbd> silencio</li>
+        </ul>
+        <p class="pause-option" id="pause-controls-back"><kbd>Esc</kbd> volver</p>
+      </div>
+      <div class="overlay-box hidden" id="pause-level">
+        <p class="pause-title">NIVEL INICIAL</p>
+        <p class="pause-level-value"><kbd id="pause-level-dec">←</kbd> <span id="pause-level-num">1</span> <kbd id="pause-level-inc">→</kbd></p>
+        <p class="ability-hint"><kbd>←</kbd><kbd>→</kbd> ajustar · <kbd>Esc</kbd> volver</p>
+        <p class="pause-option" id="pause-level-back">Volver</p>
+      </div>
+    </div>
   </div>
 
   <script src="game.js"></script>
