@@ -405,3 +405,150 @@ kbd {
   color: var(--accent);
   transition: color 0.15s;
 }
+
+/* ---- Records ---- */
+.start-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  color: var(--accent);
+}
+
+.records-box {
+  width: 220px;
+}
+
+.records-ol {
+  list-style: none;
+  counter-reset: records-counter;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.records-row {
+  counter-increment: records-counter;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--board-bg);
+  border: 1px solid var(--board-border);
+}
+
+.records-row::before {
+  content: counter(records-counter) '.';
+  color: var(--label-color);
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.records-row.highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.records-name {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.records-score {
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.records-empty {
+  font-size: 12px;
+  color: var(--controls-color);
+  text-align: center;
+  padding: 8px 0;
+}
+
+.records-stats {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--label-color);
+  text-align: center;
+}
+
+#record-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  width: 220px;
+}
+
+.records-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+#record-name {
+  width: 100%;
+  background: var(--board-bg);
+  border: 1px solid var(--board-border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  text-align: center;
+}
+
+#record-save-btn,
+#clear-records-btn,
+#start-clear-records-btn,
+#play-btn {
+  background: var(--restart-bg);
+  color: var(--restart-color);
+  border: none;
+  border-radius: 6px;
+  padding: 10px 28px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: background 0.15s;
+}
+
+#record-save-btn:hover,
+#clear-records-btn:hover,
+#start-clear-records-btn:hover,
+#play-btn:hover {
+  background: var(--restart-hover);
+}
+
+#clear-records-btn,
+#start-clear-records-btn {
+  background: transparent;
+  color: var(--controls-color);
+  border: 1px solid var(--board-border);
+  font-size: 12px;
+  padding: 8px 18px;
+}
+
+#clear-records-btn:hover,
+#start-clear-records-btn:hover {
+  background: transparent;
+  color: var(--overlay-title);
+  border-color: var(--overlay-title);
+}
+
+.start-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+}

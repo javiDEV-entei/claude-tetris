@@ -40,3 +40,12 @@ See `README.md` for the full list of tunable constants (`LINE_SCORES`, initial `
 
 - UI-facing strings and code comments are in Spanish (`PAUSA`, `GAME OVER`, `Puntuación`, `Reiniciar`) — keep new user-visible text in Spanish; identifiers stay in English.
 - Two-space indent, semicolons, ES6+ browser-native only. Don't introduce a bundler, package manager, or framework unless asked.
+
+## Records and the start screen
+
+The page no longer boots straight into `init()`. The script's final block renders the top 5 into `#records-list-start` and unhides `#start-overlay`; only the `#play-btn` click handler (registered with `{ once: true }`, so a second click is a no-op) hides that overlay and calls `init()` — that click is also the user gesture used to `ensureAudio()`.
+
+- **Storage**: `localStorage` key `records`, JSON-encoded: `{ scores: [{ name, score, lines, level }, ...], bestCombo, maxLines }`, `scores` capped at 5 and kept sorted descending by `score`. `loadRecords()`/`saveRecords()` are the only functions touching that key; `loadRecords()` wraps `JSON.parse` in `try/catch` and falls back to `{ scores: [], bestCombo: 0, maxLines: 0 }` on missing or corrupt data.
+- `qualifies(score)` and `addRecord(name, score, lines, level)` (insert, sort, slice to 5, update `bestCombo`/`maxLines`, save, return the inserted index) are the only mutation path into the top 5; `renderRecords(container, highlightIndex)` is the only render path, shared by `#records-list-start` and `#records-list-gameover`.
+- `maxCombo` (new global, reset to `0` in `init()`) tracks the best `combo` reached in the current run — `finishClear()` updates it with one line (`maxCombo = Math.max(maxCombo, combo);`) right after `combo++`, and `addRecord()` folds it into `bestCombo`.
+- `endGame()` — still the sole place that owns `#overlay`'s Game Over content — now also decides between showing `#record-form` (score qualifies) or `renderRecords(recordsListGameOver, null)` directly (it doesn't), and unhides `#clear-records-btn`. Submitting `#record-form` calls `addRecord()` then re-renders with the returned index highlighted. `togglePause()` is guarded by `if (gameOver) return;`, so it can never run after `endGame()` has repurposed `#overlay` — no reset of the records UI was needed in that path.
