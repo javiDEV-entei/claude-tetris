@@ -239,3 +239,30 @@ Al pulsar `P` o `Esc` durante la partida se abre un menú de pausa navegable con
 | Nivel inicial    | Selector (1–15) del nivel con el que empieza cada partida nueva, ajustable con `←`/`→` |
 
 `Esc` dentro de cualquier submenú vuelve a la pantalla anterior (o reanuda la partida si está en la pantalla principal). El nivel inicial elegido se guarda en `localStorage` (clave `startLevel`) y se aplica automáticamente a la próxima partida — el nivel nunca baja del elegido aunque las líneas acumuladas correspondan a un nivel inferior.
+
+---
+
+## Pantalla de inicio y tabla de records
+
+Al cargar la página se muestra `#start-overlay` en vez de arrancar la partida directamente: un título, el top 5 de puntuaciones guardado localmente, el mejor combo y el máximo de líneas conseguidos, y un botón **Jugar** que oculta la pantalla de inicio y llama a `init()` (el clic también sirve como gesto de usuario para desbloquear el `AudioContext`).
+
+- **Almacenamiento**: `localStorage`, clave `records`, en JSON: `{ scores: [{ name, score, lines, level }, ...], bestCombo, maxLines }`. `scores` guarda como máximo 5 entradas, ordenadas de mayor a menor puntuación.
+- **Helpers en `game.js`**: `loadRecords()` (lee y valida el JSON con `try/catch`, con valores por defecto si no hay nada guardado o está corrupto), `saveRecords(data)`, `qualifies(score)` (indica si una puntuación entra en el top 5) y `addRecord(name, score, lines, level)` (inserta, reordena, recorta a 5, actualiza `bestCombo`/`maxLines` y devuelve el índice insertado).
+- **`renderRecords(container, highlightIndex)`** pinta el top 5 en cualquier contenedor — se usa tanto en la pantalla de inicio (`#records-list-start`) como en el overlay de Game Over (`#records-list-gameover`), resaltando la fila indicada si se pasa un índice.
+- Al perder la partida, si la puntuación entra en el top 5 se muestra un formulario (`#record-form`) para introducir un nombre (`#record-name`, máx. 12 caracteres); al guardar se llama a `addRecord` y se pinta la tabla resaltando la fila nueva. Si no entra en el top 5, se pinta la tabla directamente sin resaltar nada.
+- Un botón **Borrar records** (con `confirm()` de por medio) está disponible tanto en la pantalla de inicio como en el overlay de Game Over.
+- `maxCombo` es una nueva global que guarda el mejor combo de la partida en curso (actualizada en `finishClear()`, reseteada a `0` en `init()`) y se usa para alimentar `bestCombo` al guardar un record.
+---
+
+## Temas visuales (skins)
+
+Un selector `SKIN` en el panel lateral (junto a la barra de energía) permite cambiar la apariencia completa del juego — tablero, next, hold, peek, selector de "cambiar pieza" y toda la interfaz vía variables CSS — sin afectar al interruptor claro/oscuro existente, que sigue funcionando de forma independiente.
+
+Skins disponibles:
+
+- **Retro** — bloques cuadrados y colores planos, el aspecto original del juego.
+- **Neon** — fondo negro con efecto de resplandor (`shadowBlur`) alrededor de cada bloque.
+- **Pastel** — paleta de colores suaves con esquinas redondeadas.
+- **Pixel art** — colores planos con una textura de cuadrícula superpuesta que simula dithering.
+
+La skin elegida se guarda en `localStorage` (`skin`) y persiste entre partidas, igual que el tema claro/oscuro y el silencio de sonido. En `game.js`, la estructura `SKINS` centraliza la paleta y la función de dibujado de cada skin; `drawBlock` delega en `SKINS[skin].draw(...)` para pintar cada bloque en cualquier canvas del juego.

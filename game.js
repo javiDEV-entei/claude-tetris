@@ -26,6 +26,96 @@ const PIECES = [
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
 ];
 
+// ==================== Skins visuales ====================
+// Cada skin define su propia paleta (mismo formato que COLORS, índice 0 =
+// null) y una función draw(context, px, py, w, color, alpha) que recibe
+// coordenadas de PÍXEL ya calculadas por drawBlock (no de celda).
+
+const NEON_COLORS = [
+  null,
+  '#00e5ff', // I
+  '#ffea00', // O
+  '#e040fb', // T
+  '#00e676', // S
+  '#ff1744', // Z
+  '#2979ff', // J
+  '#ff9100', // L
+];
+
+const PASTEL_COLORS = [
+  null,
+  '#a8ded8', // I
+  '#fff2b2', // O
+  '#dcb8e0', // T
+  '#bfe6c1', // S
+  '#f3b8b8', // Z
+  '#b8d4f0', // J
+  '#f5d3a8', // L
+];
+
+function retroDrawBlock(context, px, py, w, color, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = color;
+  context.fillRect(px, py, w, w);
+  context.fillStyle = blockHighlight;
+  context.fillRect(px, py, w, 4);
+  context.globalAlpha = 1;
+}
+
+function neonDrawBlock(context, px, py, w, color, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = '#050505';
+  context.fillRect(px, py, w, w);
+  context.shadowBlur = 12;
+  context.shadowColor = color;
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  context.strokeRect(px + 1, py + 1, w - 2, w - 2);
+  context.fillStyle = color;
+  context.globalAlpha = (alpha ?? 1) * 0.5;
+  context.fillRect(px + 4, py + 4, w - 8, w - 8);
+  context.globalAlpha = alpha ?? 1;
+  // Reset obligatorio: si no, el glow se filtra a todo lo dibujado después
+  // en este mismo contexto (grid, texto flotante, HUD del canvas).
+  context.shadowBlur = 0;
+  context.shadowColor = 'transparent';
+  context.globalAlpha = 1;
+}
+
+function pastelDrawBlock(context, px, py, w, color, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = color;
+  context.beginPath();
+  context.roundRect(px, py, w, w, 4);
+  context.fill();
+  context.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  context.beginPath();
+  context.roundRect(px, py, w, Math.max(w * 0.35, 3), 4);
+  context.fill();
+  context.globalAlpha = 1;
+}
+
+function pixelDrawBlock(context, px, py, w, color, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = color;
+  context.fillRect(px, py, w, w);
+  const cell = w / 3;
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      context.fillStyle = (r + c) % 2 === 0 ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.14)';
+      context.fillRect(px + c * cell, py + r * cell, cell, cell);
+    }
+  }
+  context.globalAlpha = 1;
+}
+
+const SKINS = {
+  retro: { colors: COLORS, draw: retroDrawBlock },
+  neon: { colors: NEON_COLORS, draw: neonDrawBlock },
+  pastel: { colors: PASTEL_COLORS, draw: pastelDrawBlock },
+  pixel: { colors: COLORS, draw: pixelDrawBlock },
+};
+
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
 // --- Modo combo y multiplicadores ---
@@ -88,6 +178,15 @@ const abilitySwapBox = document.getElementById('ability-swap');
 const ability4Option = document.getElementById('ability-4');
 const swapCanvases = Array.from(document.querySelectorAll('.swap-canvas'));
 const swapItems = Array.from(document.querySelectorAll('.swap-item'));
+const startOverlay = document.getElementById('start-overlay');
+const playBtn = document.getElementById('play-btn');
+const recordForm = document.getElementById('record-form');
+const recordNameInput = document.getElementById('record-name');
+const recordsListGameOver = document.getElementById('records-list-gameover');
+const recordsListStart = document.getElementById('records-list-start');
+const clearRecordsBtn = document.getElementById('clear-records-btn');
+const startClearRecordsBtn = document.getElementById('start-clear-records-btn');
+const skinSelect = document.getElementById('skin-select');
 
 const pauseOverlay = document.getElementById('pause-overlay');
 const pauseMainBox = document.getElementById('pause-main');
@@ -108,10 +207,12 @@ const START_LEVEL_MAX = 15;
 
 let board, current, queue, hold, canHold, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let gridColor, blockHighlight;
+let skin;
 let combo, b2b, lastMoveWasRotation, pendingRows, pendingTspin, clearFlash, floatMsgs, muted;
 let comboColor, tspinColor, slowColor;
 let energy, choosingAbility, abilityMenu, slowTimer, peekLeft, lastSnapshot, swapIndex;
 let pauseMenu, pauseIndex, startLevel;
+let maxCombo;
 
 function updateThemeColors() {
   const styles = getComputedStyle(document.body);
@@ -139,6 +240,25 @@ const storedStartLevel = parseInt(localStorage.getItem('startLevel'), 10);
 startLevel = Number.isFinite(storedStartLevel)
   ? Math.min(START_LEVEL_MAX, Math.max(START_LEVEL_MIN, storedStartLevel))
   : 1;
+
+function setSkin(name) {
+  skin = SKINS[name] ? name : 'retro';
+  document.body.dataset.skin = skin;
+  if (skinSelect) skinSelect.value = skin;
+  updateThemeColors();
+  localStorage.setItem('skin', skin);
+  // Guards: al llamarse en la carga inicial (antes de init()), `board` y
+  // `queue` todavía no existen — repintar solo lo que ya puede dibujarse sin
+  // tronar. drawHold() es segura siempre (drawPreview corta en `!piece`).
+  if (typeof board !== 'undefined' && board) draw();
+  drawHold();
+  if (typeof queue !== 'undefined' && queue) drawNext();
+  drawSwapOptions();
+}
+
+if (skinSelect) skinSelect.addEventListener('change', () => setSkin(skinSelect.value));
+
+setSkin(localStorage.getItem('skin') || 'retro');
 
 function setMuted(value) {
   muted = value;
@@ -348,6 +468,7 @@ function finishClear() {
   b2b = isHard;
 
   combo++;
+  maxCombo = Math.max(maxCombo, combo);
   const comboMult = Math.min(1 + combo, COMBO_MAX_MULTIPLIER);
   if (combo > 0) {
     total *= comboMult;
@@ -625,14 +746,12 @@ function updateHUD() {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
-  context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = blockHighlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
-  context.globalAlpha = 1;
+  const activeSkin = SKINS[skin] || SKINS.retro;
+  const color = activeSkin.colors[colorIndex];
+  const px = x * size + 1;
+  const py = y * size + 1;
+  const w = size - 2;
+  activeSkin.draw(context, px, py, w, color, alpha);
 }
 
 function drawGrid() {
@@ -788,6 +907,94 @@ function triggerEnergyFullEffect() {
   energySection.classList.add('just-filled');
 }
 
+// ==================== Records (tabla de puntuaciones) ====================
+
+const RECORDS_KEY = 'records';
+const MAX_RECORDS = 5;
+
+function loadRecords() {
+  try {
+    const raw = localStorage.getItem(RECORDS_KEY);
+    if (!raw) return { scores: [], bestCombo: 0, maxLines: 0 };
+    const parsed = JSON.parse(raw);
+    return {
+      scores: Array.isArray(parsed.scores) ? parsed.scores : [],
+      bestCombo: Number(parsed.bestCombo) || 0,
+      maxLines: Number(parsed.maxLines) || 0,
+    };
+  } catch {
+    return { scores: [], bestCombo: 0, maxLines: 0 };
+  }
+}
+
+function saveRecords(data) {
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(data));
+}
+
+function qualifies(scoreValue) {
+  if (!(scoreValue > 0)) return false;
+  const data = loadRecords();
+  if (data.scores.length < MAX_RECORDS) return true;
+  const worst = data.scores[data.scores.length - 1];
+  return scoreValue > worst.score;
+}
+
+function addRecord(name, scoreValue, linesValue, levelValue) {
+  const data = loadRecords();
+  const record = { name: (name || 'Jugador').slice(0, 12), score: scoreValue, lines: linesValue, level: levelValue };
+  data.scores.push(record);
+  data.scores.sort((a, b) => b.score - a.score);
+  data.scores = data.scores.slice(0, MAX_RECORDS);
+  data.bestCombo = Math.max(data.bestCombo, maxCombo);
+  data.maxLines = Math.max(data.maxLines, linesValue);
+  saveRecords(data);
+  return data.scores.indexOf(record);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Pinta el top 5 (nombre + puntuación) dentro de `container`, resaltando la
+// fila `highlightIndex` si se pasa. Se reutiliza tanto en el overlay de
+// Game Over como en la pantalla de inicio.
+function renderRecords(container, highlightIndex) {
+  if (!container) return;
+  const data = loadRecords();
+  container.innerHTML = '';
+
+  const list = document.createElement('ol');
+  list.className = 'records-ol';
+  if (data.scores.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'records-empty';
+    li.textContent = 'Sin puntuaciones todavía';
+    list.appendChild(li);
+  } else {
+    data.scores.forEach((r, i) => {
+      const li = document.createElement('li');
+      li.className = 'records-row' + (i === highlightIndex ? ' highlight' : '');
+      li.innerHTML = `<span class="records-name">${escapeHtml(r.name)}</span><span class="records-score">${r.score.toLocaleString()}</span>`;
+      list.appendChild(li);
+    });
+  }
+  container.appendChild(list);
+
+  const stats = document.createElement('p');
+  stats.className = 'records-stats';
+  stats.textContent = `Mejor combo: ${data.bestCombo} · Máx. líneas: ${data.maxLines}`;
+  container.appendChild(stats);
+}
+
+function clearAllRecords() {
+  if (!confirm('¿Borrar todos los records?')) return;
+  localStorage.removeItem(RECORDS_KEY);
+  renderRecords(recordsListGameOver, null);
+  renderRecords(recordsListStart, null);
+}
+
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
@@ -795,6 +1002,18 @@ function endGame() {
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
   playGameOverSound();
+
+  clearRecordsBtn.classList.remove('hidden');
+
+  if (qualifies(score)) {
+    recordNameInput.value = 'Jugador';
+    recordForm.classList.remove('hidden');
+    recordsListGameOver.classList.add('hidden');
+  } else {
+    recordForm.classList.add('hidden');
+    recordsListGameOver.classList.remove('hidden');
+    renderRecords(recordsListGameOver, null);
+  }
 }
 
 // ==================== Menú de pausa ====================
@@ -1010,6 +1229,7 @@ function init() {
   swapIndex = 0;
   pauseMenu = null;
   pauseIndex = 0;
+  maxCombo = 0;
   energySection.classList.remove('just-filled');
   updateEnergyUI();
   updatePeekUI();
@@ -1069,6 +1289,26 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 
+recordForm.addEventListener('submit', e => {
+  e.preventDefault();
+  const name = (recordNameInput.value || '').trim() || 'Jugador';
+  const idx = addRecord(name, score, lines, level);
+  recordForm.classList.add('hidden');
+  recordsListGameOver.classList.remove('hidden');
+  renderRecords(recordsListGameOver, idx);
+});
+
+clearRecordsBtn.addEventListener('click', clearAllRecords);
+startClearRecordsBtn.addEventListener('click', clearAllRecords);
+
 setMuted(localStorage.getItem('muted') === '1');
 drawSwapOptions();
-init();
+
+renderRecords(recordsListStart, null);
+startOverlay.classList.remove('hidden');
+
+playBtn.addEventListener('click', () => {
+  ensureAudio();
+  startOverlay.classList.add('hidden');
+  init();
+}, { once: true });
